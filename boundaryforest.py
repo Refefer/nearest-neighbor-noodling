@@ -100,50 +100,44 @@ class BoundaryForest(object):
         self.nodes_cnt = 0
         self.trees = [BoundaryTree(self.table, self.k, self.distance, self.c_metric) 
                 for _ in range(self.n_trees)]
+        self.rs = np.random.RandomState(self.seed)
+
+    def insert(self, xi, yi):
+        idx = self._add(xi, yi)
+        added = False
+        for t in self.trees:
+            added |= t.insert(idx)
+
+        if not added:
+            del self.table[idx]
+
+    def partial_fit(self, X, y):
+        for i in range(X.shape[0]):
+            self.insert(X[i], y[i])
 
     def fit(self, X, y):
         self._init()
-        rs = np.random.RandomState(self.seed)
-
+        
         # Add all to table
         new_idxs = []
         for i in range(X.shape[0]):
             xi, yi = X[i], y[i]
             new_idxs.append(self._add(xi, yi))
 
-        # Intialize trees
         added_idxs = set()
-        if len(new_idxs) > len(self.trees):
-            # Smart seed
-            for i, t in enumerate(self.trees):
-                t.insert(new_idxs[i])
-                added_idxs.add(new_idxs[i])
-
-            idxs = [new_idxs[i] for i in range(len(self.trees))]
-            for t in self.trees:
-                rs.shuffle(idxs)
-                for idx in idxs:
-                    t.insert(idx)
-
-            for i in range(len(added_idxs), len(new_idxs)):
-                idx = new_idxs[i]
-                for t in self.trees:
-                    if t.insert(idx):
-                        added_idxs.add(idx)
-                print i, len(added_idxs)
-        else:
-            # Shuffle add
-            for t in self.trees:
-                rs.shuffle(new_idxs)
-                for idx in new_idxs:
-                    if t.insert(idx):
-                        added_idxs.add(idx)
+        # Smart seed
+        subset = new_idxs[:len(self.trees)]
+        for i, t in enumerate(self.trees):
+            self.rs.shuffle(subset)
+            for idx in subset:
+                if t.insert(idx):
+                    added_idxs.add(idx)
 
         # Remove superfluous nodes
         for r_idx in set(new_idxs) - added_idxs:
             del self.table[r_idx]
 
-        print len(self.table)
+        self.partial_fit(X, y)
 
     def predict(self, X):
         y_hat = []
