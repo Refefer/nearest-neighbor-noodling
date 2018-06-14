@@ -1,0 +1,7 @@
+[package]
+name = "bf"
+version = "0.1.0"
+authors = ["Andrew Stanton <astanton@etsy.com>"]
+
+[dependencies]
+rand = "0.4.2"
