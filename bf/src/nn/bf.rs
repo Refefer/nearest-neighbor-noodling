@@ -113,7 +113,6 @@ impl <DT,LT> BoundaryTree<DT,LT> {
     }
 }
 
-
 pub struct BoundaryForest<DT,LT,Res> {
     trees: Vec<BoundaryTree<DT,LT>>,
     ev: Box<Evaluator<LT,Res>>
@@ -124,21 +123,23 @@ impl <DT,LT,Res> BoundaryForest<DT,LT,Res> {
     pub fn new<D: 'static + Distance<DT>, 
                L: 'static + LabelDistance<LT>, 
                E: 'static + Evaluator<LT,Res>>
-        (mut points: Vec<Rc<Record<DT,LT>>>, k: usize, d: D, ld: L, ev: E)
+        (points: Vec<Record<DT,LT>>, k: usize, d: D, ld: L, ev: E)
     -> Self {
         let rd: RBD<DT> = Rc::new(Box::new(d));
         let rld: RBLD<LT> = Rc::new(Box::new(ld));
 
+        let mut ref_points: Vec<_> = points.into_iter().map(|p| Rc::new(p)).collect();
+
         // We instantiate each tree with a unique point
-        let mut trees: Vec<_> = points.iter().map(|p| {
+        let mut trees: Vec<_> = ref_points.iter().map(|p| {
             BoundaryTree::new(p.clone(), k, rd.clone(), rld.clone())
         }).collect();
 
         // Shuffle remaining points and add them to each tree
         let mut prng = XorShiftRng::from_seed([2018,6,13,0]);
         for t in trees.iter_mut() {
-            prng.shuffle(&mut points);
-            for p in points.iter() {
+            prng.shuffle(&mut ref_points);
+            for p in ref_points.iter() {
                 t.insert(p.clone());
             }
         }
@@ -149,10 +150,10 @@ impl <DT,LT,Res> BoundaryForest<DT,LT,Res> {
         }
     }
 
-    pub fn insert(&mut self, x: DT, y: LT) -> () {
-        let r = Rc::new(Record::new(x, y));
+    pub fn insert(&mut self, r: Record<DT,LT>) -> () {
+        let rr = Rc::new(r);
         for t in self.trees.iter_mut() {
-            t.insert(r.clone());
+            t.insert(rr.clone());
         }
     }
 
@@ -161,4 +162,35 @@ impl <DT,LT,Res> BoundaryForest<DT,LT,Res> {
         self.ev.merge(v)
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nn::distance::EucDistance;
+    use nn::label_distance::OneOfKClassification;
+    use nn::evaluator::UniformEvaluator;
+    #[test]
+    fn simple_test() {
+        let d  = EucDistance;
+        let ld  = OneOfKClassification::new();
+        let ev = UniformEvaluator::new();
+        let v = vec![
+            Record::new(vec![-2f32, -1f32], 1usize),
+            Record::new(vec![-1f32, -2f32], 1usize),
+            Record::new(vec![2f32, 1f32], 0usize),
+            Record::new(vec![0f32, 0f32], 0usize)
+        ];
+
+        let mut model = BoundaryForest::new(v, 2, d, ld, ev);
+
+        assert_eq!(model.query(&vec![-1f32, -2.1f32]), 1usize);
+        assert_eq!(model.query(&vec![0.5f32, -0.1f32]), 0usize);
+
+        let x = vec![0f32, 0f32];
+        let r = Record::new(x.clone(), 10usize);
+        model.insert(r);
+
+        assert_eq!(model.query(&x), 10usize);
+    }
 }

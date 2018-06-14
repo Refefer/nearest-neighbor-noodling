@@ -2,6 +2,11 @@ extern crate rand;
 
 pub mod bf;
 pub mod knn;
+pub mod ann;
+
+pub mod distance;
+pub mod evaluator;
+pub mod label_distance;
 
 use std::rc::Rc;
 
@@ -27,4 +32,5 @@ impl <DT,LT> Record<DT,LT> {
 
 type RBD<DT> = Rc<Box<Distance<DT>>>;
 type RBLD<LT> = Rc<Box<LabelDistance<LT>>>;
+
 
