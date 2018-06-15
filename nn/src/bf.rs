@@ -167,9 +167,9 @@ impl <DT,LT,Res> BoundaryForest<DT,LT,Res> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nn::distance::EucDistance;
-    use nn::label_distance::OneOfKClassification;
-    use nn::evaluator::UniformEvaluator;
+    use distance::EucDistance;
+    use label_distance::OneOfKClassification;
+    use evaluator::UniformEvaluator;
     #[test]
     fn simple_test() {
         let d  = EucDistance;

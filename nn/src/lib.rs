@@ -34,3 +34,10 @@ type RBD<DT> = Rc<Box<Distance<DT>>>;
 type RBLD<LT> = Rc<Box<LabelDistance<LT>>>;
 
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}

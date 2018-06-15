@@ -24,3 +24,21 @@ impl <K: Eq + Hash + Clone> Evaluator<K,K> for UniformEvaluator<K> {
     }
 }
 
+#[derive(Clone)]
+pub struct DFEvaluator<K>(PhantomData<K>);
+
+impl <K> DFEvaluator<K> {
+    pub fn new() -> Self { DFEvaluator(PhantomData) }
+}
+
+impl <K: Eq + Hash + Clone> Evaluator<K,HashMap<K,usize>> for DFEvaluator<K> {
+    fn merge(&self, scores: Vec<(f32, &K)>) -> HashMap<K,usize> {
+        let mut hm = HashMap::new();
+        for (_, k) in scores {
+            let e = hm.entry(k.clone()).or_insert(0usize);
+            *e += 1;
+        }
+        hm
+    }
+}
+

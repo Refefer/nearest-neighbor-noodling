@@ -60,8 +60,8 @@ impl <DT,LT,Res> KNN<DT,LT,Res> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nn::distance::EucDistance;
-    use nn::evaluator::UniformEvaluator;
+    use distance::EucDistance;
+    use evaluator::UniformEvaluator;
     #[test]
     fn simple_test() {
         let d  = EucDistance;
