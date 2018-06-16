@@ -9,13 +9,13 @@ use self::float_ord::FloatOrd;
 use super::Evaluator;
 
 #[derive(Clone)]
-pub struct UniformEvaluator<K>(PhantomData<K>);
+pub struct Uniform<K>(PhantomData<K>);
 
-impl <K> UniformEvaluator<K> {
-    pub fn new() -> Self { UniformEvaluator(PhantomData) }
+impl <K> Uniform<K> {
+    pub fn new() -> Self { Uniform(PhantomData) }
 }
 
-impl <K: Eq + Hash + Clone> Evaluator<K,K> for UniformEvaluator<K> {
+impl <K: Eq + Hash + Clone> Evaluator<K,K> for Uniform<K> {
     fn merge(&self, scores: Vec<(f32, &K)>) -> K {
         let mut hm = HashMap::new();
         for (_, k) in scores {
@@ -29,13 +29,13 @@ impl <K: Eq + Hash + Clone> Evaluator<K,K> for UniformEvaluator<K> {
 }
 
 #[derive(Clone)]
-pub struct DFEvaluator<K>(PhantomData<K>);
+pub struct UniformDF<K>(PhantomData<K>);
 
-impl <K> DFEvaluator<K> {
-    pub fn new() -> Self { DFEvaluator(PhantomData) }
+impl <K> UniformDF<K> {
+    pub fn new() -> Self { UniformDF(PhantomData) }
 }
 
-impl <K: Eq + Hash + Clone> Evaluator<K,HashMap<K,usize>> for DFEvaluator<K> {
+impl <K: Eq + Hash + Clone> Evaluator<K,HashMap<K,usize>> for UniformDF<K> {
     fn merge(&self, scores: Vec<(f32, &K)>) -> HashMap<K,usize> {
         let mut hm = HashMap::new();
         for (_, k) in scores {

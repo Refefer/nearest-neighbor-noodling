@@ -60,12 +60,12 @@ impl <DT,LT,Res> KNN<DT,LT,Res> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use distance::EucDistance;
-    use evaluator::UniformEvaluator;
+    use distance::Euclidean;
+    use evaluator::Uniform;
     #[test]
     fn simple_test() {
-        let d  = EucDistance;
-        let ev = UniformEvaluator::new();
+        let d  = Euclidean;
+        let ev = Uniform::new();
         let mut nn = KNN::new(3, d, ev);
 
         assert_eq!(nn.query(&vec![-1f32, -2.1f32]), None);

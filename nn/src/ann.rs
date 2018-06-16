@@ -78,14 +78,14 @@ impl <DT,LT,Res> Ann<DT,LT,Res> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use distance::EucDistance;
-    use label_distance::OneOfKClassification;
-    use evaluator::UniformEvaluator;
+    use distance::Euclidean;
+    use label_distance::OneOfK;
+    use evaluator::Uniform;
     #[test]
     fn simple_test() {
-        let d  = EucDistance;
-        let ld  = OneOfKClassification::new();
-        let ev = UniformEvaluator::new();
+        let d  = Euclidean;
+        let ld  = OneOfK::new();
+        let ev = Uniform::new();
 
         // Training
         let r1 =  Record::new(vec![-2f32, -1f32], 1usize);
