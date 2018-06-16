@@ -73,11 +73,11 @@ impl <R: SparseVec<f32>> Distance<R> for Cosine {
     fn distance(&self, x: &R, y: &R) -> f32 {
         let mut i = 0usize;
         let mut j = 0usize;
-        let mut dot = 0f32;
         let x_idxs = x.idxs();
         let x_vals = x.vals();
         let y_idxs = y.idxs();
         let y_vals = y.vals();
+        let mut dot = 0f32;
         let mut x_norm = 0f32;
         let mut y_norm = 0f32;
         while i < x_idxs.len() && j < y_idxs.len() {
@@ -92,6 +92,10 @@ impl <R: SparseVec<f32>> Distance<R> for Cosine {
                 },
                 _ => {
                     dot += x_vals[i] * y_vals[j];
+                    if self.0 { 
+                        x_norm += x_vals[i].powi(2); 
+                        y_norm += y_vals[j].powi(2); 
+                    }
                     i += 1;
                     j += 1;
                 }
@@ -159,7 +163,7 @@ mod tests {
     fn euclidean_sparse() {
         let d  = Euclidean;
         let x = Sparse(vec![0,1], vec![1f32, 2f32]);
-        let y = Sparse(vec![0,1], vec![0f32, 12f32]);
+        let y = Sparse(vec![1], vec![12f32]);
         assert_eq!(d.distance(&x, &y), 101f32);
     }
 
@@ -173,14 +177,14 @@ mod tests {
         assert_eq!(d.distance(&x, &y), 1f32 - c);
     }
 
-    /*
     #[test]
-    fn euclidean_sparse() {
-        let d  = Euclidean;
+    fn cosine_sparse() {
+        let d  = Cosine(true);
         let x = Sparse(vec![0,1], vec![1f32, 2f32]);
-        let y = Sparse(vec![0,1], vec![0f32, 12f32]);
-        assert_eq!(d.distance(&x, &y), 101f32);
+        let y = Sparse(vec![1], vec![12f32]);
+        let denom = (1f32 + 4f32).sqrt() * 12f32;
+        let c = (12f32 * 2f32) / denom;
+        assert_eq!(d.distance(&x, &y), 1f32 - c);
     }
-    */
 
 }
