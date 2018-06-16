@@ -76,11 +76,23 @@ impl Evaluator<f32,f32> for ShepardRegressor {
         let mut score = 0f32;
         let mut denom = 0f32;
         for (dist, k) in scores {
-            let weight = 1. / (dist + 1e-6);
-            denom += k;
-            score += k * weight;
+            denom += 1. / (dist + 1e-6);
+            score += k / (dist + 1e-6) ;
         }
         score / denom
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shep_reg() {
+        let v = vec![(0.1, &2.), (0.3, &10.)];
+        let num = 2. / (0.1 + 1e-6) + 10. / (0.3 + 1e-6);
+        let denom = 1. / (0.1 + 1e-6) + 1. / (0.3 + 1e-6);
+        let result = ShepardRegressor.merge(v);
+        assert_eq!(result, num / denom);
+    }
+}

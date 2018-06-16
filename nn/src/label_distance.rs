@@ -14,10 +14,23 @@ impl <K: Eq> LabelDistance<K> for OneOfK<K> {
     }
 }
 
-pub struct ThresholdReg(f32);
 
-impl LabelDistance<f32> for ThresholdReg{
+#[derive(Clone)]
+pub struct ThresholdRegression(pub f32);
+
+impl LabelDistance<f32> for ThresholdRegression {
     fn equivalent(&self, x: &f32, y: &f32) -> bool {
         (x - y).abs() < self.0
     }
 }
+
+#[derive(Clone)]
+pub struct Index;
+
+impl <K> LabelDistance<K> for Index {
+    fn equivalent(&self, _x: &K, _y: &K) -> bool {
+        false
+    }
+}
+
+
