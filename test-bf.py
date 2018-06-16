@@ -5,11 +5,11 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.datasets import load_svmlight_file
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, mean_absolute_error
 
 import numpy as np
 
-from boundaryforest import BoundaryForest
+from boundaryforest import BoundaryForest, ShepardRegressor, ThresholdDist
 from pseudonn import *
 
 def transform_feats(X, y):
@@ -28,7 +28,7 @@ def main(train, test):
     train_X = train_X.toarray()
     test_X = test_X.toarray()
 
-    bf = BoundaryForest(50, 5)
+    bf = BoundaryForest(50, 50)
     bf.fit(train_X, train_y)
     y_hat = bf.predict(test_X)
     print "BF:", accuracy_score(y_hat, test_y)
@@ -43,16 +43,16 @@ def main(train, test):
     #y_hat = clf.predict(test_X)
     #print "LR:", accuracy_score(y_hat, test_y)
 
-    clf = MLPClassifier(verbose=1, early_stopping=True, hidden_layer_sizes=(100, 100))
-    clf.fit(train_X, train_y)
-    y_hat = clf.predict(test_X)
-    print "MLP:", accuracy_score(y_hat, test_y)
-
-    #clf = PseudoNN(HartTrainer(NoopTrainer(), outliers=False), 1)
-    #clf = PseudoNN(KmeansTrainer(20), 1)
+    #clf = MLPClassifier(verbose=1, early_stopping=True, hidden_layer_sizes=(100, 100))
     #clf.fit(train_X, train_y)
     #y_hat = clf.predict(test_X)
-    #print "PNN:", accuracy_score(y_hat, test_y)
+    #print "MLP:", accuracy_score(y_hat, test_y)
+
+    #clf = PseudoNN(HartTrainer(NoopTrainer(), outliers=False), 1)
+    clf = PseudoNN(KmeansTrainer(20), 1)
+    clf.fit(train_X, train_y)
+    y_hat = clf.predict(test_X)
+    print "PNN:", accuracy_score(y_hat, test_y)
 
 if __name__ == '__main__':
     main(*sys.argv[1:])

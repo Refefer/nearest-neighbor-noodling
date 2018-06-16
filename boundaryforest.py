@@ -3,30 +3,100 @@ from collections import defaultdict
 import numpy as np
 from sklearn.metrics import accuracy_score
 
+class DistMetric(object):
+    def compare(self, x, y):
+        raise NotImplementedError()
+
+    def batch_compare(self, x, ys):
+        return [self.compare(x, y) for y in ys]
+
+class LambdaMetric(DistMetric):
+    def __init__(self, f):
+        self.f = f
+
+    def compare(self, x, y):
+        return self.f(x, y)
+
+class EucDist(DistMetric):
+    def compare(self, x, y):
+        return ((x - y) ** 2).sum()
+
+class SparseEucDist(DistMetric):
+    def compare(self, x, y):
+        return (x - y).power(2).sum()
+
+class LabelDistance(object):
+    def compare(self, cx, cy):
+        raise NotImplementedError()
+
+class EqualDist(LabelDistance):
+    def compare(self, cx, cy):
+        return cx == cy
+
+class ThresholdDist(LabelDistance):
+    def __init__(self, threshold):
+        self.threshold = threshold
+
+    def compare(self, cx, cy):
+        return abs(cx - cy) < self.threshold
+
+class Estimator(object):
+    def scorer(self, scores):
+        raise NotImplementedError()
+            
+class ShepardClassifier(Estimator):
+    def score(self, scores):
+        classes = defaultdict(float)
+        denom = 0.0
+        for dist, cls in scores:
+            weight = 1. / (dist + 1e-6)
+            classes[cls] += weight
+            denom += weight
+
+        score, cls = max((v / denom, k) for k, v in classes.iteritems())
+        return cls, score
+
+class ShepardRegressor(Estimator):
+    def score(self, scores):
+        score = 0.0
+        denom = 0.0
+        for dist, cls in scores:
+            weight = 1. / (dist + 1e-6)
+            score += cls * weight
+            denom += weight
+
+        return score / denom, 1
+
+class UniformRegressor(Estimator):
+    def score(self, scores):
+        return sum(cls for _, cls in scores) / float(len(scores)), 1
+
 class Node(object):
     def __init__(self, idx):
         self.idx = idx
         self.children = []
 
 class BoundaryTree(object):
-    def __init__(self, table, k, distance, c_metric=lambda x, y: x == y):
+    def __init__(self, table, k, distance, label_distance):
         self.k = k
         self.distance = distance
-        self.c_metric = c_metric
+        self.label_distance = label_distance
 
         self.root = None
         self.table = table 
 
-    def _score(self, idx, q):
-        return self.distance(self.table[idx][0], q)
+    def _score(self, q, idxs):
+        xs = [self.table[idx][0] for idx in idxs]
+        return self.distance.batch_compare(q, xs)
 
     def _traverse(self, y):
         node = self.root
-        node_score = self._score(node.idx, y)
+        node_score = self._score(y, [node.idx])[0]
         done = False
         while not done:
             if len(node.children) > 0:
-                best = min((self._score(vn.idx, y), vn) for vn in node.children)
+                c_scores = self._score(y, (vn.idx for vn in node.children))
+                best = min((c_scores[i], vn) for i, vn in enumerate(node.children))
             else:
                 best = (float('inf'), None)
 
@@ -48,7 +118,7 @@ class BoundaryTree(object):
         y, cy = self.table[idx]
         # Find the closest candidate
         node_score, node = self._traverse(y)
-        if not self.c_metric(self.table[node.idx][1], cy):
+        if not self.label_distance.compare(self.table[node.idx][1], cy):
             # Add the node
             new_node = Node(idx)
             node.children.append(new_node)
@@ -60,33 +130,23 @@ class BoundaryTree(object):
         node_score, node = self._traverse(y)
         return node_score, self.table[node.idx][1]
 
-def sq_euc_dist(x, y):
-    return ((x - y) ** 2).sum()
-
-def shepard_classification(scores, dists, raw=False):
-    classes = defaultdict(float)
-    denom = 0.0
-    for dist, cls in scores:
-        classes[cls] += 1. / (dist + 1e-6)
-        denom += 1. / (dist + 1e-6)
-
-    score, cls = max((v / denom, k) for k, v in classes.iteritems())
-    if raw:
-        return (cls, score)
-
-    return cls
-
 class BoundaryForest(object):
     def __init__(self, n_trees, k, 
-            distance = sq_euc_dist, 
-            c_metric = lambda x, y: x == y, 
-            seed     = 2018,
-            estimator = shepard_classification):
+            distance       = EucDist(), 
+            label_distance = EqualDist(),
+            estimator      = ShepardClassifier(),
+            seed           = 2018):
+
+        if not isinstance(distance, DistMetric):
+            if callable(distance):
+                distance = LambdaMetric(distance)
+            else:
+                raise AssertionError("Distance isn't a DistMetric or callable!")
 
         self.k = k
         self.n_trees = n_trees
         self.distance = distance 
-        self.c_metric = c_metric
+        self.label_distance = label_distance
         self.estimator = estimator
         self.seed = seed
 
@@ -98,7 +158,7 @@ class BoundaryForest(object):
     def _init(self):
         self.table = {}
         self.nodes_cnt = 0
-        self.trees = [BoundaryTree(self.table, self.k, self.distance, self.c_metric) 
+        self.trees = [BoundaryTree(self.table, self.k, self.distance, self.label_distance) 
                 for _ in range(self.n_trees)]
         self.rs = np.random.RandomState(self.seed)
 
@@ -111,22 +171,23 @@ class BoundaryForest(object):
         if not added:
             del self.table[idx]
 
-    def partial_fit(self, X, y):
-        for i in range(X.shape[0]):
+    def partial_fit(self, X, y, offset=0):
+        if not hasattr(self, 'trees'):
+            self._init()
+
+        for i in range(offset, X.shape[0]):
             self.insert(X[i], y[i])
 
     def fit(self, X, y):
         self._init()
         
         # Add all to table
-        new_idxs = []
-        for i in range(X.shape[0]):
-            xi, yi = X[i], y[i]
-            new_idxs.append(self._add(xi, yi))
+        subset = []
+        for i in range(min(len(self.trees), X.shape[0])):
+            subset.append(self._add(X[i], y[i]))
 
         added_idxs = set()
         # Smart seed
-        subset = new_idxs[:len(self.trees)]
         for i, t in enumerate(self.trees):
             self.rs.shuffle(subset)
             for idx in subset:
@@ -134,18 +195,37 @@ class BoundaryForest(object):
                     added_idxs.add(idx)
 
         # Remove superfluous nodes
-        for r_idx in set(new_idxs) - added_idxs:
+        for r_idx in set(subset) - added_idxs:
             del self.table[r_idx]
+            
+        self.partial_fit(X, y, offset=len(subset))
 
-        self.partial_fit(X, y)
+        return self
 
     def predict(self, X):
         y_hat = []
         for xi in X:
             scores = [t.query(xi) for t in self.trees]
-            y_hat.append(self.estimator(scores, False))
+            y_hat.append(self.estimator.score(scores)[0])
 
         return np.vstack(y_hat)
 
     def score(self, X, y):
         return accuracy_score(y, self.predict(X))
+
+def BFClassifier(n_trees, k, **kwargs):
+    return BoundaryForest(n_trees, k, **kwargs)
+
+def BFRegressor(n_trees, k, threshold, weight='distance'):
+
+    assert weight in ('distance', 'uniform')
+    if weight == 'distance':
+        estimator = ShepardRegressor()
+    else:
+        estimator = UniformRegressor()
+
+    label_distance = ThresholdDist(threshold)
+    return BoundaryForest(n_trees, k, 
+            label_distance=label_distance, 
+            estimator=estimator)
+

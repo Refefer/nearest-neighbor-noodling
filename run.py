@@ -17,14 +17,14 @@ def cosine_similarity(x, y):
     return 1 - (x.dot(y) / (mag(x) * mag(y)))
         
 def main():
-    N = 10000
+    N = 1000
     datasets = [
-        load_digits(return_X_y=True),
+        #load_digits(return_X_y=True),
         make_moons(N, noise=0.3, random_state=2016),
-        make_circles(N, noise=0.2, factor=0.5, random_state=2017),
-        load_iris(return_X_y=True),
-        make_classification(N, n_features=200, n_informative=5,
-                        random_state=1, n_classes=5, n_clusters_per_class=3)
+        #make_circles(N, noise=0.2, factor=0.5, random_state=2017),
+        #load_iris(return_X_y=True),
+        #make_classification(N, n_features=200, n_informative=5,
+        #                random_state=1, n_classes=5, n_clusters_per_class=3)
     ]
 
     for i, (X, y) in enumerate(datasets):
@@ -41,16 +41,16 @@ def main():
         print "X:", tr_X.shape[0]
 
         for clf in [
-                NearestCentroid(),
-                BaggingClassifier(NearestCentroid(), max_samples=0.2, random_state=2022),
-                LogisticRegression(),
-                KNeighborsClassifier(5),
-                GaussianNB(),
-                PseudoNN(KmeansTrainer(20), 2),
-                PseudoNN(RandomTrainer(20, retries=10), 2),
-                PseudoNN(KmeansPlusTrainer(20, retries=10, nn=1), 2),
-                PseudoNN(HartTrainer(NoopTrainer()), 1),
-                BoundaryForest(50, 50, metric=cosine_similarity)
+#                NearestCentroid(),
+#                BaggingClassifier(NearestCentroid(), max_samples=0.2, random_state=2022),
+#                LogisticRegression(),
+#                KNeighborsClassifier(5),
+#                GaussianNB(),
+#                PseudoNN(KmeansTrainer(20), 2),
+#                PseudoNN(RandomTrainer(20, retries=10), 2),
+#                PseudoNN(KmeansPlusTrainer(20, retries=10, nn=1), 2),
+#                PseudoNN(HartTrainer(NoopTrainer()), 1),
+                BoundaryForest(50, 50)
             ]:
             clf.fit(tr_X, tr_y)
 
