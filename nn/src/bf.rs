@@ -169,12 +169,12 @@ mod tests {
     use super::*;
     use distance::Euclidean;
     use label_distance::OneOfK;
-    use evaluator::Uniform;
+    use evaluator::Bagging;
     #[test]
     fn simple_test() {
         let d  = Euclidean;
         let ld  = OneOfK::new();
-        let ev = Uniform::new();
+        let ev = Bagging::new();
         let v = vec![
             Record::new(vec![-2f32, -1f32], 1usize),
             Record::new(vec![-1f32, -2f32], 1usize),

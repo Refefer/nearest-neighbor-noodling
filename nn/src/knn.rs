@@ -61,11 +61,11 @@ impl <DT,LT,Res> KNN<DT,LT,Res> {
 mod tests {
     use super::*;
     use distance::Euclidean;
-    use evaluator::Uniform;
+    use evaluator::Bagging;
     #[test]
     fn simple_test() {
         let d  = Euclidean;
-        let ev = Uniform::new();
+        let ev = Bagging::new();
         let mut nn = KNN::new(3, d, ev);
 
         assert_eq!(nn.query(&vec![-1f32, -2.1f32]), None);

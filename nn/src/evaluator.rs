@@ -1,7 +1,7 @@
 extern crate float_ord;
 
 use std::hash::Hash;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
 use self::float_ord::FloatOrd;
@@ -9,13 +9,13 @@ use self::float_ord::FloatOrd;
 use super::Evaluator;
 
 #[derive(Clone)]
-pub struct Uniform<K>(PhantomData<K>);
+pub struct Bagging<K>(PhantomData<K>);
 
-impl <K> Uniform<K> {
-    pub fn new() -> Self { Uniform(PhantomData) }
+impl <K> Bagging<K> {
+    pub fn new() -> Self { Bagging(PhantomData) }
 }
 
-impl <K: Eq + Hash + Clone> Evaluator<K,K> for Uniform<K> {
+impl <K: Eq + Hash + Clone> Evaluator<K,K> for Bagging<K> {
     fn merge(&self, scores: Vec<(f32, &K)>) -> K {
         let mut hm = HashMap::new();
         for (_, k) in scores {
@@ -29,13 +29,13 @@ impl <K: Eq + Hash + Clone> Evaluator<K,K> for Uniform<K> {
 }
 
 #[derive(Clone)]
-pub struct UniformDF<K>(PhantomData<K>);
+pub struct BaggingDF<K>(PhantomData<K>);
 
-impl <K> UniformDF<K> {
-    pub fn new() -> Self { UniformDF(PhantomData) }
+impl <K> BaggingDF<K> {
+    pub fn new() -> Self { BaggingDF(PhantomData) }
 }
 
-impl <K: Eq + Hash + Clone> Evaluator<K,HashMap<K,usize>> for UniformDF<K> {
+impl <K: Eq + Hash + Clone> Evaluator<K,HashMap<K,usize>> for BaggingDF<K> {
     fn merge(&self, scores: Vec<(f32, &K)>) -> HashMap<K,usize> {
         let mut hm = HashMap::new();
         for (_, k) in scores {
@@ -43,6 +43,16 @@ impl <K: Eq + Hash + Clone> Evaluator<K,HashMap<K,usize>> for UniformDF<K> {
             *e += 1;
         }
         hm
+    }
+}
+
+#[derive(Clone)]
+pub struct Uniform;
+
+impl Evaluator<f32,f32> for Uniform {
+    fn merge(&self, scores: Vec<(f32, &f32)>) -> f32 {
+        let num: f32 = scores.iter().map(|x| x.1).sum();
+        num / scores.len() as f32
     }
 }
 
@@ -65,6 +75,37 @@ impl <K: Eq + Hash + Clone> Evaluator<K,K> for ShepardClassifier<K> {
             .max_by_key(|x| FloatOrd(*x.1))
             .unwrap();
         k.clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct MultiLabelShepard<K>{
+    pd: PhantomData<K>,
+    n_ret_labels: usize 
+}
+
+impl <K> MultiLabelShepard<K> {
+    pub fn new(n_ret_labels: usize) -> Self { 
+        MultiLabelShepard {
+            pd: PhantomData,
+            n_ret_labels: n_ret_labels
+        }
+    }
+}
+
+impl <K: Eq + Hash + Clone> Evaluator<HashSet<K>,Vec<K>> for MultiLabelShepard<K> {
+    fn merge(&self, scores: Vec<(f32, &HashSet<K>)>) -> Vec<K> {
+        let mut hm = HashMap::new();
+        for (dist, ks) in scores {
+            let scale = 1. / (dist + 1e-6);
+            for k in ks {
+                let e = hm.entry(k.clone()).or_insert(0f32);
+                *e += scale;
+            }
+        }
+        let mut kvs: Vec<_> = hm.into_iter().collect();
+        kvs.sort_by_key(|x| FloatOrd(-x.1));
+        kvs.into_iter().map(|x| x.0).take(self.n_ret_labels).collect()
     }
 }
 

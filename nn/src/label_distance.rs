@@ -1,3 +1,5 @@
+use std::hash::Hash;
+use std::collections::HashSet;
 use std::marker::PhantomData;
 use super::LabelDistance;
 
@@ -11,6 +13,22 @@ impl <K> OneOfK<K> {
 impl <K: Eq> LabelDistance<K> for OneOfK<K> {
     fn equivalent(&self, x: &K, y: &K) -> bool {
         x == y
+    }
+}
+
+
+#[derive(Clone)]
+pub struct Jaccard<K>(f64, PhantomData<K>);
+
+impl <K> Jaccard<K> {
+    pub fn new(threshold: f64) -> Self { Jaccard(threshold, PhantomData) }
+}
+
+impl <K: Eq + Hash> LabelDistance<HashSet<K>> for Jaccard<K> {
+    fn equivalent(&self, x: &HashSet<K>, y: &HashSet<K>) -> bool {
+        let num = x.intersection(y).collect::<HashSet<&K>>().len();
+        let denom= x.union(y).collect::<HashSet<&K>>().len();
+        (num as f64 / denom as f64) > self.0
     }
 }
 
