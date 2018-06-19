@@ -13,7 +13,7 @@ pub struct Ann<DT,LT,Res> {
     builder: Box<Fn(Vec<Record<DT,LT>>) -> BoundaryForest<DT,LT,Res>>
 }
 
-impl <DT,LT,Res> Ann<DT,LT,Res> {
+impl <DT: Send + Sync,LT: Send + Sync,Res> Ann<DT,LT,Res> {
     pub fn new<D: 'static + Distance<DT> + Clone, 
                L: 'static + LabelDistance<LT> + Clone, 
                E: 'static + Evaluator<LT,Res> + Clone> (
@@ -33,15 +33,14 @@ impl <DT,LT,Res> Ann<DT,LT,Res> {
         }
     }
 
-    pub fn insert(&mut self, record: Record<DT,LT>) -> () {
-        let check = match self.model {
+    pub fn insert(&mut self, record: Record<DT,LT>) -> bool {
+        let (check, inserted) = match self.model {
             Model::BF(ref mut model) => {
-                model.insert(record);
-                None
+                (None, model.insert(record))
             },
             Model::Knn(ref mut model) => {
                 model.insert(record);
-                Some(model.len())
+                (Some(model.len()), true)
             }
         };
 
@@ -55,6 +54,26 @@ impl <DT,LT,Res> Ann<DT,LT,Res> {
                 self.model = Model::BF((self.builder)(points.unwrap()))
             }
         }
+        inserted
+    }
+
+    pub fn batch_insert<I: Iterator<Item=Record<DT,LT>>>(&mut self, mut r: I, size: usize) -> usize {
+        let mut count = 0usize;
+        loop {
+            if let Model::Knn(_) = self.model {
+                if let Some(r) = r.next() {
+                    if self.insert(r) {
+                        count += 1;
+                    }
+                } else {
+                    break;
+                }
+            } else if let Model::BF(ref mut bf) = self.model {
+                count += bf.batch_insert(r, size);
+                break
+            }
+        }
+        count
     }
 
     pub fn query(&self, x: &DT) -> Option<Res> {

@@ -1,23 +1,25 @@
+extern crate itertools;
+extern crate rayon;
 extern crate rand;
 
-use std::rc::Rc;
+use std::collections::HashSet;
+use std::sync::Arc;
 
+use self::rayon::prelude::*;
 use self::rand::{XorShiftRng,SeedableRng,Rng};
 
 use super::*;
 
 struct Node<DT,LT> {
-    point: Rc<Record<DT,LT>>,
+    point: Arc<Record<DT,LT>>,
     children: Vec<Node<DT,LT>>
 }
 
 impl <DT,LT> Node<DT,LT> {
-    fn new(record: Rc<Record<DT, LT>>) -> Self {
+    fn new(record: Arc<Record<DT, LT>>) -> Self {
         Node { point: record, children: Vec::new() }
     }
 }
-
-type RN<DT,LT> = Node<DT,LT>;
 
 struct BoundaryTree<DT, LT>
 {
@@ -30,9 +32,9 @@ struct BoundaryTree<DT, LT>
 fn find_mut<'a, DT,LT>(
     dist: &RBD<DT>,
     k: usize,
-    mut node: &'a mut RN<DT,LT>,
-    record: &Rc<Record<DT,LT>>
-) -> &'a mut RN<DT,LT> {
+    mut node: &'a mut Node<DT,LT>,
+    record: &Arc<Record<DT,LT>>
+) -> &'a mut Node<DT,LT> {
     let mut score = dist.distance(&node.point.x, &record.x);
     loop {
         if node.children.len() == 0 { return node }
@@ -59,9 +61,9 @@ fn find_mut<'a, DT,LT>(
 fn query<'a,DT,LT>(
     dist: &RBD<DT>,
     k: usize,
-    mut node: &'a RN<DT,LT>,
+    mut node: &'a Node<DT,LT>,
     x: &DT
-) -> (f32, &'a RN<DT,LT>) {
+) -> (f32, &'a Node<DT,LT>) {
     let mut score = dist.distance(&node.point.x, &x);
     loop {
         if node.children.len() == 0 { return (score, node) }
@@ -88,7 +90,7 @@ fn query<'a,DT,LT>(
 
 impl <DT,LT> BoundaryTree<DT,LT> {
 
-    fn new(p: Rc<Record<DT,LT>>, k: usize, d: RBD<DT>, ld: RBLD<LT>) -> Self {
+    fn new(p: Arc<Record<DT,LT>>, k: usize, d: RBD<DT>, ld: RBLD<LT>) -> Self {
         BoundaryTree {
             root: Node::new(p),
             k: k,
@@ -97,7 +99,7 @@ impl <DT,LT> BoundaryTree<DT,LT> {
         }
     }
     
-    fn insert(&mut self, record: Rc<Record<DT,LT>>) -> bool {
+    fn insert(&mut self, record: Arc<Record<DT,LT>>) -> bool {
         let new_node = find_mut(&self.dist, self.k, &mut self.root, &record);
         if !self.lab_dist.equivalent(&new_node.point.y, &record.y) {
             new_node.children.push(Node::new(record));
@@ -118,17 +120,17 @@ pub struct BoundaryForest<DT,LT,Res> {
     ev: Box<Evaluator<LT,Res>>
 }
 
-impl <DT,LT,Res> BoundaryForest<DT,LT,Res> {
+impl <DT: Send + Sync,LT: Send + Sync,Res> BoundaryForest<DT,LT,Res> {
 
     pub fn new<D: 'static + Distance<DT>, 
                L: 'static + LabelDistance<LT>, 
                E: 'static + Evaluator<LT,Res>>
         (points: Vec<Record<DT,LT>>, k: usize, d: D, ld: L, ev: E)
     -> Self {
-        let rd: RBD<DT> = Rc::new(Box::new(d));
-        let rld: RBLD<LT> = Rc::new(Box::new(ld));
+        let rd: RBD<DT> = Arc::new(Box::new(d));
+        let rld: RBLD<LT> = Arc::new(Box::new(ld));
 
-        let mut ref_points: Vec<_> = points.into_iter().map(|p| Rc::new(p)).collect();
+        let mut ref_points: Vec<_> = points.into_iter().map(|p| Arc::new(p)).collect();
 
         // We instantiate each tree with a unique point
         let mut trees: Vec<_> = ref_points.iter().map(|p| {
@@ -150,15 +152,49 @@ impl <DT,LT,Res> BoundaryForest<DT,LT,Res> {
         }
     }
 
-    pub fn insert(&mut self, r: Record<DT,LT>) -> () {
-        let rr = Rc::new(r);
-        for t in self.trees.iter_mut() {
-            t.insert(rr.clone());
+    pub fn insert(&mut self, r: Record<DT,LT>) -> bool {
+        let rr = Arc::new(r);
+        self.trees.par_iter_mut()
+            .fold(|| true, |acc,t| { acc && t.insert(rr.clone()) })
+            .reduce(|| true, |a,b| a && b)
+    }
+
+    pub fn batch_insert<I: Iterator<Item=Record<DT,LT>>>(&mut self, mut r: I, size: usize) -> usize {
+        let mut pass = 0u32;
+        let mut total_count = 0usize;
+        loop {
+            let batch: Vec<Arc<Record<DT,LT>>> = 
+                (&mut r).take(size).map(|x| Arc::new(x)).collect();
+            // Finished when we're out of items
+            if batch.len() == 0 { break }
+            pass += 1;
+            total_count += self.trees.par_iter_mut()
+                .enumerate()
+                .fold(|| HashSet::new(), |mut acc,it| { 
+                    let (i, t) = it;
+                    let mut prng = XorShiftRng::from_seed([2018,6,pass,i as u32]);
+                    let mut my_batch: Vec<_> = batch.iter().enumerate().collect();
+                    prng.shuffle(&mut my_batch);
+                    for (idx, p) in my_batch.into_iter() {
+                        if t.insert(p.clone()) {
+                            acc.insert(idx);
+                        }
+                    }
+                    acc
+                })
+                .reduce(|| HashSet::new(), |mut a,b| {
+                    for idx in b {
+                        a.insert(idx);
+                    }
+                    a
+                })
+                .len();
         }
+        total_count
     }
 
     pub fn query(&self, x: &DT) -> Res {
-        let v: Vec<_> = self.trees.iter().map(|t| t.query(x)).collect();
+        let v: Vec<_> = self.trees.par_iter().map(|t| t.query(x)).collect();
         self.ev.merge(v)
     }
 

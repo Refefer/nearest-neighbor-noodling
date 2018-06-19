@@ -8,13 +8,13 @@ pub mod distance;
 pub mod evaluator;
 pub mod label_distance;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
-pub trait Distance<DataType> {
+pub trait Distance<DataType>: Send + Sync {
     fn distance(&self, x: &DataType, y: &DataType) -> f32;
 }
 
-pub trait LabelDistance<LabelType> {
+pub trait LabelDistance<LabelType>: Send + Sync {
     fn equivalent(&self, x: &LabelType, y: &LabelType) -> bool;
 }
 
@@ -30,8 +30,8 @@ impl <DT,LT> Record<DT,LT> {
     }
 }
 
-type RBD<DT> = Rc<Box<Distance<DT>>>;
-type RBLD<LT> = Rc<Box<LabelDistance<LT>>>;
+type RBD<DT> = Arc<Box<Distance<DT> + Send + Sync>>;
+type RBLD<LT> = Arc<Box<LabelDistance<LT> + Send + Sync>>;
 
 
 #[cfg(test)]

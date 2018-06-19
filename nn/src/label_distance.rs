@@ -10,7 +10,7 @@ impl <K> OneOfK<K> {
     pub fn new() -> Self { OneOfK(PhantomData) }
 }
 
-impl <K: Eq> LabelDistance<K> for OneOfK<K> {
+impl <K: Eq + Send + Sync> LabelDistance<K> for OneOfK<K> {
     fn equivalent(&self, x: &K, y: &K) -> bool {
         x == y
     }
@@ -24,11 +24,11 @@ impl <K> Jaccard<K> {
     pub fn new(threshold: f64) -> Self { Jaccard(threshold, PhantomData) }
 }
 
-impl <K: Eq + Hash> LabelDistance<HashSet<K>> for Jaccard<K> {
+impl <K: Eq + Hash + Send + Sync> LabelDistance<HashSet<K>> for Jaccard<K> {
     fn equivalent(&self, x: &HashSet<K>, y: &HashSet<K>) -> bool {
         let num = x.intersection(y).collect::<HashSet<&K>>().len();
         let denom= x.union(y).collect::<HashSet<&K>>().len();
-        (num as f64 / denom as f64) > self.0
+        (num as f64 / denom as f64) >= self.0
     }
 }
 

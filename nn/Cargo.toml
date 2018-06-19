@@ -6,3 +6,5 @@ authors = ["Andrew Stanton <astanton@etsy.com>"]
 [dependencies]
 rand = "0.4.2"
 float-ord = "0.2.0"
+rayon = "1.0"
+itertools = "0.7.8"
